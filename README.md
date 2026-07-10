@@ -1,0 +1,191 @@
+# Graphics Department Tracking Tool
+
+A single-user Windows desktop application that tracks fire truck graphics jobs as they move through an 8-bay production shop — from design proofing, through striping/lettering/chevron installation, through QC, to completion. It replaced an informal Trello-and-memory process with a real, structured system that has an actual data model, automatic history logging, and enforced business rules.
+
+Built with **Flutter (Windows desktop)** and a local **SQLite** database. No server, no login, no cloud dependency — it's a purpose-built tool for one person's daily workflow, packaged as a native `.exe`.
+
+![Active trucks list](docs/screenshot-truck-list.png)
+
+## Why this exists
+
+A small graphics shop runs every fire truck through the same pipeline: **Proofing → Production/Installation → QC → Complete**, occupying one of 8 physical bays at a time. On top of the main pipeline, installers file ad-hoc requests for compartment labels and tags throughout the process. None of this was tracked in one place — there was no record of how long a truck sat in a given stage, no structured checklist for the striping/lettering sub-steps, and no way to search for "what does HS-24-118 need done."
+
+This app models that real workflow directly: stages, sub-steps, schedule status, tag requests, and a retention policy that mirrors how the shop actually operates (8 active trucks + the 8 most recently completed, nothing older kept around).
+
+## Features
+
+- **Active truck list** — sortable/filterable by bay, stage, schedule status (In Bay / Out for Testing), and due date
+- **Truck detail view** — stage control (forward *and* backward, with a confirmation gate before archiving), schedule status, and a live Production/Installation checklist
+- **Production/Installation checklist** — the 9 standard sub-steps (Cab Striping, Cab Lettering, Bumper Chevron, Hydraulic Area Striping, Passenger/Driver Body Striping & Lettering, Rear Body Graphics and Chevron, Ladder Signs, Ladder Tip), plus the ability to add one-off custom sub-steps per truck. Automatically skipped for dealer-supplied graphics jobs.
+- **Graphics specification** — Stripe Color, Chevron Color, and Stripe Feature, each a fixed option set with a "Custom" free-text fallback, plus a Stripe-on-Stainless flag
+- **Final proof PDFs** — attach the 2 required customer-approved proofs per truck and open them in the system's default PDF viewer directly from the app
+- **Tag/label requests** — a lighter-weight, independent queue for ad-hoc installer requests, filterable by status and requesting bay
+- **Archive** — read-only view of the 8 most recently completed trucks
+- **Automatic history logging** — every stage change (and every sub-step completion) is timestamped and logged in the background, even though there's no timeline UI yet — the data is there for a future view
+- **Rolling retention** — completing a truck archives it automatically; once more than 8 trucks are archived, the oldest is permanently deleted, keeping the working set exactly matched to the physical shop (8 bays + 8 most recent)
+
+## Screenshots
+
+| Active Trucks |
+|---|
+| ![Active trucks list, filterable by bay/stage/schedule status](docs/screenshot-truck-list.png) |
+
+*(More views — truck detail, the Production/Installation checklist, tag requests, and the archive — follow the same table-based, no-frills design shown above.)*
+
+## Tech stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| UI framework | Flutter (Windows desktop target) | Native `.exe`, no browser/runtime dependency, one codebase for the whole UI |
+| State management | `provider` (`ChangeNotifier`) | Matches the app's scale — no need for a heavier state framework |
+| Database | SQLite via `sqflite_common_ffi` | Zero-setup, single-file, works fully offline; the `_ffi` variant is what makes `sqflite` — normally mobile-only — work on Windows desktop |
+| File dialogs | `file_selector` | See [*Engineering notes*](#engineering-notes--decisions-worth-explaining) below — this replaced `file_picker`, which has a real bug on Windows |
+| Opening PDFs | `url_launcher` | Hands proof PDFs off to the OS's default viewer instead of embedding a PDF renderer |
+| Local file paths | `path_provider` + `path` | Resolves a per-user app-data directory for the DB file and copied proof PDFs |
+
+## Architecture
+
+The app is layered top to bottom: UI never touches SQL directly, and business rules live in one place (the repository layer), not scattered across screens.
+
+```mermaid
+flowchart TD
+    subgraph UI["ui/ — screens, widgets, state controllers"]
+        Screens["screens/ (list, detail, forms, archive)"]
+        Widgets["widgets/ (StageBadge, TruckTable, SubstepChecklist)"]
+        Controllers["state/ (ChangeNotifier controllers)"]
+    end
+    subgraph Domain["repositories/ — business rules"]
+        TruckRepo["TruckRepository\n(stage changes, retention, bay/HS validation)"]
+        SubstepRepo["SubstepRepository\n(checklist seeding & progress)"]
+        TagRepo["TagRequestRepository"]
+        HistRepo["StageHistoryRepository"]
+    end
+    subgraph Data["models/ + db/"]
+        Models["models/ (Truck, TagRequest, ...)"]
+        DbHelper["DatabaseHelper\n(singleton, migrations)"]
+        Schema["schema.dart (DDL + migrations)"]
+    end
+
+    Screens --> Controllers --> TruckRepo & SubstepRepo & TagRepo
+    TruckRepo & SubstepRepo & TagRepo --> HistRepo
+    TruckRepo & SubstepRepo & TagRepo & HistRepo --> Models
+    TruckRepo & SubstepRepo & TagRepo & HistRepo --> DbHelper --> Schema
+    DbHelper -->|sqflite_common_ffi| SQLite[("SQLite file\n(app-data directory)")]
+```
+
+### Data model
+
+```mermaid
+erDiagram
+    TRUCK ||--o{ STAGE_HISTORY : logs
+    TRUCK ||--o{ SUBSTEP_PROGRESS : tracks
+    TRUCK ||--o{ TAG_REQUEST : "cascades on delete"
+
+    TRUCK {
+        int id PK
+        text hs_number UK "business key, unique"
+        text truck_name
+        text customer
+        int bay_number "1-8, unique among active trucks"
+        text current_stage "Proofing/Production/QC/Complete"
+        datetime date_entered_stage "auto-stamped"
+        bool dealer_supplied_graphics
+        text schedule_status "In Bay / Out for Testing"
+        date due_date
+        text proof_final_path_1
+        text proof_final_path_2
+        text stripe_color
+        text chevron_color
+        text stripe_feature
+        bool stripe_on_stainless
+        bool is_active "true=active, false=archived"
+    }
+    STAGE_HISTORY {
+        int id PK
+        int truck_id FK
+        text stage "top-level stage OR sub-step name"
+        datetime entered_at
+    }
+    SUBSTEP_PROGRESS {
+        int id PK
+        int truck_id FK
+        text substep_name
+        int sort_order
+        bool is_custom
+        bool is_complete
+        datetime completed_at
+    }
+    TAG_REQUEST {
+        int id PK
+        date date_requested
+        int bay_requested_by
+        int truck_id FK
+        text tag_type
+        text tag_text
+        date date_made
+        text status "Needed / Completed"
+    }
+```
+
+`truck_id` (not `hs_number`) is the real relational foreign key on every child table, with `ON DELETE CASCADE` — `hs_number` is a unique, human-facing lookup field, not the join key. That distinction is what makes "delete a truck, its tag requests disappear with it" actually work correctly at the database level instead of relying on manual cleanup code.
+
+## Engineering notes & decisions worth explaining
+
+A few things in this codebase exist because of a real bug or a real design tradeoff, not just "how Flutter tutorials do it":
+
+- **Bay uniqueness is enforced at the database level, not just in the UI.** `idx_truck_bay_active` is a *partial* unique index (`WHERE is_active = 1`) on `truck.bay_number` — only active trucks compete for a bay, so a bay frees up the instant a truck is archived, and a completed truck's old bay number doesn't collide with whoever's using it now. The repository layer catches the resulting SQLite constraint violation and turns it into a typed `BayTakenException` the UI can show as a real error message instead of leaking a raw database exception.
+
+- **Async singleton race on startup.** Several screens ask for a database connection at once when the app launches. The naive `if (_db == null) _db = await _open()` lazy-singleton pattern has a classic race: multiple callers can all see `null` and each kick off their own `_open()` before the first one finishes. Fixed with a `Future<Database>?` "in-flight open" guard so concurrent first-callers all await the same open instead of racing to reconfigure the database driver.
+
+- **`file_picker` → `file_selector` swap.** The initial build used `file_picker` for attaching proof PDFs. On Windows, that package spawns the native file dialog on a separate isolate with no owner window handle, so the dialog can open *behind* the main app window — it looks like clicking "Attach PDF" does nothing. Switched to `file_selector` (Flutter-team-maintained), which correctly parents its dialog to the app window.
+
+- **Schema migrations are real, not aspirational.** The Graphics Specification fields (stripe color, chevron color, stripe feature, stainless flag) were added after the app was already in use with real data. `schema.dart` carries an explicit `migrateV1ToV2` migration (`ALTER TABLE` statements) wired through `DatabaseHelper`'s `onUpgrade`, and it's covered by a test that hand-builds a v1 database file, seeds a row, opens it through the real upgrade path, and asserts the existing row survives with sane defaults for the new columns.
+
+- **`updateDetails()` deliberately can't touch stage.** Early on, editing a truck's details (name, notes, bay, etc.) wrote every field from the passed-in `Truck` object — including `current_stage`. If the object being saved was stale relative to a stage change made elsewhere (e.g. edited from a screen that hadn't refreshed), saving the edit form could silently revert the stage. `updateDetails()` now explicitly excludes stage-related columns from its `UPDATE`; only `changeStage()` can move a truck between stages, which is also the only path that logs to `stage_history`.
+
+## Testing
+
+Business logic is covered by repository-level tests that run against a real (temp-file) SQLite database via `sqflite_common_ffi` — no UI, no mocks:
+
+```
+flutter test test/repository_smoke_test.dart
+```
+
+Covers: stage transitions in both directions, sub-step seeding/skipping for dealer-supplied trucks, custom sub-steps, bay-uniqueness and duplicate-HS-number rejection, cascade delete, the 8-active/8-archived rolling retention window, tag request status filtering, and the v1→v2 schema migration against a hand-built legacy database file.
+
+## Getting started
+
+**Requirements:** Flutter SDK (Windows desktop support enabled), Visual Studio with the "Desktop development with C++" workload.
+
+```powershell
+flutter pub get
+flutter run -d windows      # run in debug mode
+flutter build windows       # produce build\windows\x64\runner\Release\graphics_bay_tracker.exe
+flutter test                # run the test suite
+```
+
+The SQLite database and any attached proof PDFs are stored in the current user's app-data directory (`%LOCALAPPDATA%\...\BayTracker\`) — nothing is written outside that folder, and there's no network access at all.
+
+## Project structure
+
+```
+lib/
+  db/              schema.dart (DDL + migrations), database_helper.dart (singleton, FK cascade)
+  models/          Truck, StageHistory, SubstepProgress, TagRequest
+  repositories/    All business rules: stage changes, retention, cascade delete, validation
+  ui/
+    screens/       Truck list/detail/form, tag request list/form, archive
+    widgets/       StageBadge, TruckTable, SubstepChecklist
+    state/         ChangeNotifier controllers (filter/sort state, wraps repositories)
+  utils/           Stage/option constants, app-data path resolution, file-open helper
+test/
+  repository_smoke_test.dart   Full business-rule test suite (see Testing, above)
+```
+
+## Out of scope (for now)
+
+Multi-user accounts, cloud sync, mobile builds, a kanban board view, a reporting/analytics dashboard, and notifications were all deliberately deferred — this is a single-user tool built to solve one specific, concrete workflow problem first. The stage-history log is already captured in the background for a future timeline view without needing a schema change to add it.
+
+## License
+
+Personal/portfolio project — no license file included. If you want to reuse or build on this, reach out first.

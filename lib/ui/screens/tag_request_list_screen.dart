@@ -1,0 +1,163 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/tag_request.dart';
+import '../../utils/constants.dart';
+import '../state/tag_request_list_controller.dart';
+import '../state/truck_list_controller.dart';
+import 'tag_request_form_screen.dart';
+
+class TagRequestListScreen extends StatefulWidget {
+  const TagRequestListScreen({super.key});
+
+  @override
+  State<TagRequestListScreen> createState() => _TagRequestListScreenState();
+}
+
+class _TagRequestListScreenState extends State<TagRequestListScreen> {
+  static final _dateFmt = DateFormat.yMMMd();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TagRequestListController>().load();
+      context.read<TruckListController>().load();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = context.watch<TagRequestListController>();
+    final trucks = context.watch<TruckListController>();
+    final truckLookup = {
+      for (final t in [...trucks.visibleTrucks, ...trucks.archived]) t.id: t,
+    };
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Tag / Label Requests')),
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.add),
+        label: const Text('Add Request'),
+        onPressed: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const TagRequestFormScreen()),
+          );
+        },
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                DropdownButton<String?>(
+                  value: controller.statusFilter,
+                  hint: const Text('Status'),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All statuses')),
+                    for (final s in TagStatus.all)
+                      DropdownMenuItem(value: s, child: Text(s)),
+                  ],
+                  onChanged: controller.setStatusFilter,
+                ),
+                DropdownButton<int?>(
+                  value: controller.bayFilter,
+                  hint: const Text('Requesting bay'),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All bays')),
+                    for (var b = 1; b <= bayCount; b++)
+                      DropdownMenuItem(value: b, child: Text('Bay $b')),
+                  ],
+                  onChanged: controller.setBayFilter,
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: controller.loading
+                ? const Center(child: CircularProgressIndicator())
+                : controller.requests.isEmpty
+                    ? const Center(child: Text('No tag requests match the current filters.'))
+                    : ListView.builder(
+                        itemCount: controller.requests.length,
+                        itemBuilder: (context, i) {
+                          final r = controller.requests[i];
+                          final truck = truckLookup[r.truckId];
+                          return _TagRequestTile(
+                            request: r,
+                            truckLabel: truck == null
+                                ? 'Unknown truck'
+                                : '${truck.hsNumber} — ${truck.truckName}',
+                            dateFmt: _dateFmt,
+                            onTap: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      TagRequestFormScreen(existing: r),
+                                ),
+                              );
+                            },
+                            onToggleStatus: () {
+                              if (r.status == TagStatus.needed) {
+                                controller.markCompleted(r.id!);
+                              } else {
+                                controller.markNeeded(r.id!);
+                              }
+                            },
+                            onDelete: () => controller.delete(r.id!),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TagRequestTile extends StatelessWidget {
+  final TagRequest request;
+  final String truckLabel;
+  final DateFormat dateFmt;
+  final VoidCallback onTap;
+  final VoidCallback onToggleStatus;
+  final VoidCallback onDelete;
+
+  const _TagRequestTile({
+    required this.request,
+    required this.truckLabel,
+    required this.dateFmt,
+    required this.onTap,
+    required this.onToggleStatus,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompleted = request.status == TagStatus.completed;
+    return ListTile(
+      onTap: onTap,
+      leading: Checkbox(
+        value: isCompleted,
+        onChanged: (_) => onToggleStatus(),
+      ),
+      title: Text('${request.tagType} — $truckLabel'),
+      subtitle: Text(
+        '${request.tagText}\nRequested ${dateFmt.format(request.dateRequested)} · Bay ${request.bayRequestedBy}'
+        '${request.dateMade != null ? ' · Made ${dateFmt.format(request.dateMade!)}' : ''}',
+      ),
+      isThreeLine: true,
+      trailing: IconButton(
+        icon: const Icon(Icons.delete_outline),
+        onPressed: onDelete,
+      ),
+    );
+  }
+}
