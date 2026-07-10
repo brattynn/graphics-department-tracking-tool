@@ -11,7 +11,7 @@
 ; adjust MyBuildDir below if run from elsewhere)
 
 #define MyAppName "Graphics Bay Tracker"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Brattynn Thompson"
 #define MyAppExeName "graphics_bay_tracker.exe"
 #define MyBuildDir "..\build\windows\x64\runner\Release"
