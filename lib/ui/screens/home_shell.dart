@@ -22,6 +22,8 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: Row(
         children: [
@@ -29,6 +31,34 @@ class _HomeShellState extends State<HomeShell> {
             selectedIndex: _index,
             onDestinationSelected: (i) => setState(() => _index = i),
             labelType: NavigationRailLabelType.all,
+            leading: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(
+                      Icons.local_shipping_rounded,
+                      color: scheme.onPrimary,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Bay Tracker',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
             destinations: const [
               NavigationRailDestination(
                 icon: Icon(Icons.local_shipping_outlined),

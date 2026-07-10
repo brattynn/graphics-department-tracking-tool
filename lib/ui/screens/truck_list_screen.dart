@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../utils/constants.dart';
 import '../state/truck_list_controller.dart';
+import '../widgets/filter_dropdown.dart';
 import '../widgets/truck_table.dart';
 import 'truck_detail_screen.dart';
 import 'truck_form_screen.dart';
@@ -52,15 +53,15 @@ class _TruckListScreenState extends State<TruckListScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                   child: Wrap(
-                    spacing: 12,
+                    spacing: 10,
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      DropdownButton<int?>(
+                      FilterDropdown<int?>(
                         value: controller.bayFilter,
-                        hint: const Text('Bay'),
+                        hint: 'All bays',
                         items: [
                           const DropdownMenuItem(value: null, child: Text('All bays')),
                           for (var b = 1; b <= bayCount; b++)
@@ -68,9 +69,9 @@ class _TruckListScreenState extends State<TruckListScreen> {
                         ],
                         onChanged: (v) => controller.setBayFilter(v),
                       ),
-                      DropdownButton<String?>(
+                      FilterDropdown<String?>(
                         value: controller.stageFilter,
-                        hint: const Text('Stage'),
+                        hint: 'All stages',
                         items: [
                           const DropdownMenuItem(value: null, child: Text('All stages')),
                           for (final s in Stage.all)
@@ -78,9 +79,9 @@ class _TruckListScreenState extends State<TruckListScreen> {
                         ],
                         onChanged: (v) => controller.setStageFilter(v),
                       ),
-                      DropdownButton<String?>(
+                      FilterDropdown<String?>(
                         value: controller.scheduleStatusFilter,
-                        hint: const Text('Schedule status'),
+                        hint: 'All schedule statuses',
                         items: [
                           const DropdownMenuItem(
                               value: null, child: Text('All schedule statuses')),
@@ -92,9 +93,10 @@ class _TruckListScreenState extends State<TruckListScreen> {
                       if (controller.bayFilter != null ||
                           controller.stageFilter != null ||
                           controller.scheduleStatusFilter != null)
-                        TextButton(
+                        TextButton.icon(
                           onPressed: controller.clearFilters,
-                          child: const Text('Clear filters'),
+                          icon: const Icon(Icons.close_rounded, size: 16),
+                          label: const Text('Clear filters'),
                         ),
                     ],
                   ),

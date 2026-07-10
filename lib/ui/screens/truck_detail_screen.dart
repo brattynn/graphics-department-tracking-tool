@@ -165,137 +165,154 @@ class _TruckDetailScreenState extends State<TruckDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  StageBadge(stage: truck.currentStage),
-                  const SizedBox(width: 12),
-                  Text('Bay ${truck.bayNumber}',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(width: 12),
-                  Chip(label: Text(truck.scheduleStatus)),
-                ],
-              ),
-              if (!widget.readOnly) ...[
-                const SizedBox(height: 16),
+              _section(children: [
                 Row(
                   children: [
-                    const Text('Stage:'),
-                    const SizedBox(width: 8),
-                    DropdownButton<String>(
-                      value: truck.currentStage,
-                      items: [
-                        for (final s in Stage.all)
-                          DropdownMenuItem(value: s, child: Text(s)),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) _changeStage(v);
-                      },
-                    ),
+                    StageBadge(stage: truck.currentStage),
+                    const SizedBox(width: 12),
+                    Text('Bay ${truck.bayNumber}',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(width: 12),
+                    Chip(label: Text(truck.scheduleStatus)),
+                  ],
+                ),
+                if (!widget.readOnly) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Text('Stage:'),
+                      const SizedBox(width: 8),
+                      DropdownButton<String>(
+                        value: truck.currentStage,
+                        items: [
+                          for (final s in Stage.all)
+                            DropdownMenuItem(value: s, child: Text(s)),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) _changeStage(v);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text('Schedule status:'),
+                      const SizedBox(width: 8),
+                      DropdownButton<String>(
+                        value: truck.scheduleStatus,
+                        items: [
+                          for (final s in ScheduleStatus.all)
+                            DropdownMenuItem(value: s, child: Text(s)),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) _setScheduleStatus(v);
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ]),
+              _section(children: [
+                _infoRow('Customer', truck.customer ?? '—'),
+                _infoRow('Due Date',
+                    truck.dueDate == null ? '—' : _dateFmt.format(truck.dueDate!)),
+                _infoRow('Dealer-supplied graphics',
+                    truck.dealerSuppliedGraphics ? 'Yes' : 'No'),
+                _infoRow('Entered current stage',
+                    _dateTimeFmt.format(truck.dateEnteredStage)),
+                _infoRow('Created', _dateFmt.format(truck.createdAt)),
+                if (truck.notes != null && truck.notes!.isNotEmpty)
+                  _infoRow('Notes', truck.notes!),
+              ]),
+              _section(title: 'Graphics Specification', children: [
+                _infoRow('Stripe Color', truck.stripeColorDisplay ?? '—'),
+                _infoRow('Chevron Color', truck.chevronColorDisplay ?? '—'),
+                _infoRow('Stripe Feature', truck.stripeFeatureDisplay ?? '—'),
+                _infoRow('Stripe on Stainless',
+                    truck.stripeOnStainless ? 'Yes' : 'No'),
+              ]),
+              _section(title: 'Final Approved Proofs', children: [
+                _proofRow('Proof 1', truck.proofFinalPath1),
+                _proofRow('Proof 2', truck.proofFinalPath2),
+              ]),
+              _section(title: 'Production/Installation Sub-steps', children: [
+                if (truck.dealerSuppliedGraphics)
+                  const Text('Skipped — dealer-supplied graphics.')
+                else if (truck.currentStage != Stage.productionInstallation &&
+                    _substeps.isEmpty)
+                  const Text('Not yet applicable for the current stage.')
+                else
+                  SubstepChecklist(
+                    substeps: _substeps,
+                    readOnly: widget.readOnly,
+                    onToggle: (s, complete) async {
+                      await _substepRepo.setComplete(
+                          s.id!, truck.id!, s.substepName, complete);
+                      await _load();
+                    },
+                    onAddCustom: (name) async {
+                      await _substepRepo.addCustom(truck.id!, name);
+                      await _load();
+                    },
+                    onRemove: (s) async {
+                      await _substepRepo.removeSubstep(s.id!);
+                      await _load();
+                    },
+                  ),
+              ]),
+              _section(children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Tag / Label Requests',
+                        style: Theme.of(context).textTheme.titleSmall),
+                    if (!widget.readOnly)
+                      TextButton.icon(
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add'),
+                        onPressed: () async {
+                          await Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) =>
+                                TagRequestFormScreen(presetTruckId: truck.id),
+                          ));
+                          await _load();
+                        },
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text('Schedule status:'),
-                    const SizedBox(width: 8),
-                    DropdownButton<String>(
-                      value: truck.scheduleStatus,
-                      items: [
-                        for (final s in ScheduleStatus.all)
-                          DropdownMenuItem(value: s, child: Text(s)),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) _setScheduleStatus(v);
-                      },
-                    ),
-                  ],
-                ),
-              ],
-              const Divider(height: 32),
-              _infoRow('Customer', truck.customer ?? '—'),
-              _infoRow('Due Date',
-                  truck.dueDate == null ? '—' : _dateFmt.format(truck.dueDate!)),
-              _infoRow('Dealer-supplied graphics',
-                  truck.dealerSuppliedGraphics ? 'Yes' : 'No'),
-              _infoRow('Entered current stage',
-                  _dateTimeFmt.format(truck.dateEnteredStage)),
-              _infoRow('Created', _dateFmt.format(truck.createdAt)),
-              if (truck.notes != null && truck.notes!.isNotEmpty)
-                _infoRow('Notes', truck.notes!),
-              const Divider(height: 32),
-              Text('Graphics Specification',
-                  style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              _infoRow('Stripe Color', truck.stripeColorDisplay ?? '—'),
-              _infoRow('Chevron Color', truck.chevronColorDisplay ?? '—'),
-              _infoRow('Stripe Feature', truck.stripeFeatureDisplay ?? '—'),
-              _infoRow(
-                  'Stripe on Stainless', truck.stripeOnStainless ? 'Yes' : 'No'),
-              const Divider(height: 32),
-              Text('Final Approved Proofs',
-                  style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              _proofRow('Proof 1', truck.proofFinalPath1),
-              _proofRow('Proof 2', truck.proofFinalPath2),
-              const Divider(height: 32),
-              Text('Production/Installation Sub-steps',
-                  style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              if (truck.dealerSuppliedGraphics)
-                const Text('Skipped — dealer-supplied graphics.')
-              else if (truck.currentStage != Stage.productionInstallation &&
-                  _substeps.isEmpty)
-                const Text('Not yet applicable for the current stage.')
-              else
-                SubstepChecklist(
-                  substeps: _substeps,
-                  readOnly: widget.readOnly,
-                  onToggle: (s, complete) async {
-                    await _substepRepo.setComplete(
-                        s.id!, truck.id!, s.substepName, complete);
-                    await _load();
-                  },
-                  onAddCustom: (name) async {
-                    await _substepRepo.addCustom(truck.id!, name);
-                    await _load();
-                  },
-                  onRemove: (s) async {
-                    await _substepRepo.removeSubstep(s.id!);
-                    await _load();
-                  },
-                ),
-              const Divider(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Tag / Label Requests',
-                      style: Theme.of(context).textTheme.titleSmall),
-                  if (!widget.readOnly)
-                    TextButton.icon(
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add'),
-                      onPressed: () async {
-                        await Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) =>
-                              TagRequestFormScreen(presetTruckId: truck.id),
-                        ));
-                        await _load();
-                      },
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_tagRequests.isEmpty)
-                const Text('No tag requests for this truck.')
-              else
-                ..._tagRequests.map((tr) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(tr.tagType),
-                      subtitle: Text(tr.tagText),
-                      trailing: Chip(label: Text(tr.status)),
-                    )),
+                if (_tagRequests.isEmpty)
+                  const Text('No tag requests for this truck.')
+                else
+                  ..._tagRequests.map((tr) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(tr.tagType),
+                        subtitle: Text(tr.tagText),
+                        trailing: Chip(label: Text(tr.status)),
+                      )),
+              ]),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _section({String? title, required List<Widget> children}) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title != null) ...[
+              Text(title, style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 12),
+            ],
+            ...children,
+          ],
         ),
       ),
     );

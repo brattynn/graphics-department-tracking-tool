@@ -89,8 +89,16 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
+            // CompanyName + ProductName together determine the folder
+            // path_provider_windows resolves for the app's local data
+            // directory (%LOCALAPPDATA%\CompanyName\ProductName\...) — see
+            // path_provider_windows_real.dart. Do NOT change either value
+            // without a migration path: doing so silently orphans every
+            // existing installation's SQLite database into a new, empty
+            // folder, which looks like data loss to the user. FileDescription
+            // is safe to change freely; it isn't used for path resolution.
             VALUE "CompanyName", "com.baytracker" "\0"
-            VALUE "FileDescription", "graphics_bay_tracker" "\0"
+            VALUE "FileDescription", "Graphics Bay Tracker" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "graphics_bay_tracker" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.baytracker. All rights reserved." "\0"

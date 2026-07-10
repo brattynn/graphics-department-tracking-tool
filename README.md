@@ -23,6 +23,7 @@ This app models that real workflow directly: stages, sub-steps, schedule status,
 
 ## Features
 
+- **A real Material 3 theme, not defaults** — custom light/dark color scheme (follows the Windows system setting), themed data tables, cards, inputs, and buttons, a native-feeling font (Segoe UI), and smooth cross-fade page transitions — see [`app_theme.dart`](lib/ui/theme/app_theme.dart)
 - **Active truck list** — sortable/filterable by bay, stage, schedule status (In Bay / Out for Testing), and due date
 - **Truck detail view** — stage control (forward *and* backward, with a confirmation gate before archiving), schedule status, and a live Production/Installation checklist
 - **Production/Installation checklist** — the 9 standard sub-steps (Cab Striping, Cab Lettering, Bumper Chevron, Hydraulic Area Striping, Passenger/Driver Body Striping & Lettering, Rear Body Graphics and Chevron, Ladder Signs, Ladder Tip), plus the ability to add one-off custom sub-steps per truck. Automatically skipped for dealer-supplied graphics jobs.
@@ -141,6 +142,8 @@ erDiagram
 ## Engineering notes & decisions worth explaining
 
 A few things in this codebase exist because of a real bug or a real design tradeoff, not just "how Flutter tutorials do it":
+
+- **`CompanyName`/`ProductName` in the Windows `.rc` file are load-bearing, not cosmetic.** `path_provider_windows` derives the app's local-data folder as `%LOCALAPPDATA%\<CompanyName>\<ProductName>\...` straight from the exe's version resource. During a UI polish pass I renamed `ProductName` for a nicer Task Manager/properties display — which silently pointed every future launch at a brand-new, empty folder, orphaning the existing SQLite database. No data was actually deleted, but it would look exactly like data loss to a real user after an update. Reverted `ProductName`, kept the cosmetic `FileDescription` change, and left a comment in `Runner.rc` explaining why those two fields specifically can't change without a migration.
 
 - **Bay uniqueness is enforced at the database level, not just in the UI.** `idx_truck_bay_active` is a *partial* unique index (`WHERE is_active = 1`) on `truck.bay_number` — only active trucks compete for a bay, so a bay frees up the instant a truck is archived, and a completed truck's old bay number doesn't collide with whoever's using it now. The repository layer catches the resulting SQLite constraint violation and turns it into a typed `BayTakenException` the UI can show as a real error message instead of leaking a raw database exception.
 

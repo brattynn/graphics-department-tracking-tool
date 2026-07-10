@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'ui/screens/home_shell.dart';
 import 'ui/state/tag_request_list_controller.dart';
 import 'ui/state/truck_list_controller.dart';
+import 'ui/theme/app_theme.dart';
 
 class BayTrackerApp extends StatelessWidget {
   const BayTrackerApp({super.key});
@@ -19,10 +20,9 @@ class BayTrackerApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Graphics Bay Tracker',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorSchemeSeed: Colors.indigo,
-          useMaterial3: true,
-        ),
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: ThemeMode.system,
         home: const HomeShell(),
       ),
     );
