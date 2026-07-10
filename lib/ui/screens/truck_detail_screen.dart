@@ -42,6 +42,11 @@ class _TruckDetailScreenState extends State<TruckDetailScreen> {
   bool _loading = true;
 
   static final _dateFmt = DateFormat.yMMMd();
+  // A distinct instance, not built by chaining .add_jm() off _dateFmt at
+  // call time: intl's add_jm() mutates the formatter in place and returns
+  // it, so calling it on a shared static instance inside build() would
+  // permanently accumulate another time pattern onto _dateFmt every rebuild.
+  static final _dateTimeFmt = DateFormat.yMMMd().add_jm();
 
   @override
   void initState() {
@@ -213,7 +218,7 @@ class _TruckDetailScreenState extends State<TruckDetailScreen> {
               _infoRow('Dealer-supplied graphics',
                   truck.dealerSuppliedGraphics ? 'Yes' : 'No'),
               _infoRow('Entered current stage',
-                  _dateFmt.add_jm().format(truck.dateEnteredStage)),
+                  _dateTimeFmt.format(truck.dateEnteredStage)),
               _infoRow('Created', _dateFmt.format(truck.createdAt)),
               if (truck.notes != null && truck.notes!.isNotEmpty)
                 _infoRow('Notes', truck.notes!),
