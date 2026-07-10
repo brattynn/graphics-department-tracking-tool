@@ -39,6 +39,7 @@ class _TagRequestListScreenState extends State<TagRequestListScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Tag / Label Requests')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'add-tag-request-fab',
         icon: const Icon(Icons.add),
         label: const Text('Add Request'),
         onPressed: () async {

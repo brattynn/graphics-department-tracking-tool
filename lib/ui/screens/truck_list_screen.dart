@@ -39,6 +39,7 @@ class _TruckListScreenState extends State<TruckListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'add-truck-fab',
         icon: const Icon(Icons.add),
         label: const Text('Add Truck'),
         onPressed: () async {
