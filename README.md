@@ -6,6 +6,15 @@ Built with **Flutter (Windows desktop)** and a local **SQLite** database. No ser
 
 ![Active trucks list](docs/screenshot-truck-list.png)
 
+## Download & install
+
+Grab the latest installer from **[Releases](../../releases/latest)** — `BayTrackerSetup.exe`. It's a standard Windows installer (built with Inno Setup):
+
+- Installs per-user (no admin rights required, no UAC prompt)
+- Creates a Start Menu shortcut and an optional desktop shortcut
+- Registers a normal uninstaller in Windows' "Add or Remove Programs"
+- On first launch, the app creates its own SQLite database automatically — there's nothing to configure, no server to point at, no separate setup step
+
 ## Why this exists
 
 A small graphics shop runs every fire truck through the same pipeline: **Proofing → Production/Installation → QC → Complete**, occupying one of 8 physical bays at a time. On top of the main pipeline, installers file ad-hoc requests for compartment labels and tags throughout the process. None of this was tracked in one place — there was no record of how long a truck sat in a given stage, no structured checklist for the striping/lettering sub-steps, and no way to search for "what does HS-24-118 need done."
@@ -166,6 +175,18 @@ flutter test                # run the test suite
 
 The SQLite database and any attached proof PDFs are stored in the current user's app-data directory (`%LOCALAPPDATA%\...\BayTracker\`) — nothing is written outside that folder, and there's no network access at all.
 
+### Building the installer
+
+The installer is built with [Inno Setup](https://jrsoftware.org/isinfo.php) from `packaging/installer.iss`, which packages whatever is currently in `build\windows\x64\runner\Release\`:
+
+```powershell
+flutter build windows --release
+iscc packaging\installer.iss
+# -> packaging\Output\BayTrackerSetup.exe
+```
+
+It's a per-user install (`PrivilegesRequired=lowest`) targeting `%LOCALAPPDATA%\Programs\Graphics Bay Tracker`, so it doesn't need admin rights and won't prompt for UAC elevation — appropriate for installing on a work PC without needing IT involved.
+
 ## Project structure
 
 ```
@@ -180,6 +201,8 @@ lib/
   utils/           Stage/option constants, app-data path resolution, file-open helper
 test/
   repository_smoke_test.dart   Full business-rule test suite (see Testing, above)
+packaging/
+  installer.iss    Inno Setup script that builds BayTrackerSetup.exe
 ```
 
 ## Out of scope (for now)

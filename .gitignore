@@ -46,3 +46,7 @@ app.*.map.json
 
 # Claude Code local tooling config (not part of the app)
 .claude/
+
+# Compiled installer output (published as a GitHub Release asset instead
+# of being committed — see packaging/installer.iss to rebuild it)
+/packaging/Output/
