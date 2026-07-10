@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/truck.dart';
 import '../state/truck_list_controller.dart';
 import 'stage_badge.dart';
+import 'truck_progress_ring.dart';
 
 class TruckTable extends StatelessWidget {
   final List<Truck> trucks;
@@ -85,6 +86,7 @@ class TruckTable extends StatelessWidget {
                       ? null
                       : (_, _) => onSort!(TruckSortField.dueDate),
                 ),
+                const DataColumn(label: Text('Progress')),
               ],
               rows: trucks.map((t) {
                 return DataRow(
@@ -99,6 +101,7 @@ class TruckTable extends StatelessWidget {
                     DataCell(Text(t.dueDate == null
                         ? '—'
                         : _dateFmt.format(t.dueDate!))),
+                    DataCell(TruckProgressRing(truck: t, size: 28)),
                   ],
                 );
               }).toList(),

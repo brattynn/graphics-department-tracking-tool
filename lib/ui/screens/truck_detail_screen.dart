@@ -14,6 +14,7 @@ import '../../utils/open_file.dart';
 import '../state/truck_list_controller.dart';
 import '../widgets/stage_badge.dart';
 import '../widgets/substep_checklist.dart';
+import '../widgets/truck_progress_ring.dart';
 import 'tag_request_form_screen.dart';
 import 'truck_form_screen.dart';
 
@@ -167,13 +168,19 @@ class _TruckDetailScreenState extends State<TruckDetailScreen> {
             children: [
               _section(children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    StageBadge(stage: truck.currentStage),
-                    const SizedBox(width: 12),
-                    Text('Bay ${truck.bayNumber}',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(width: 12),
-                    Chip(label: Text(truck.scheduleStatus)),
+                    Row(
+                      children: [
+                        StageBadge(stage: truck.currentStage),
+                        const SizedBox(width: 12),
+                        Text('Bay ${truck.bayNumber}',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(width: 12),
+                        Chip(label: Text(truck.scheduleStatus)),
+                      ],
+                    ),
+                    TruckProgressRing(truck: truck, size: 56, showLabel: true),
                   ],
                 ),
                 if (!widget.readOnly) ...[
