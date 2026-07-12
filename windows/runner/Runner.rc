@@ -98,7 +98,7 @@ BEGIN
             // folder, which looks like data loss to the user. FileDescription
             // is safe to change freely; it isn't used for path resolution.
             VALUE "CompanyName", "com.baytracker" "\0"
-            VALUE "FileDescription", "Graphics Bay Tracker" "\0"
+            VALUE "FileDescription", "Bay Tracker" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "graphics_bay_tracker" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.baytracker. All rights reserved." "\0"

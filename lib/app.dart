@@ -18,7 +18,7 @@ class BayTrackerApp extends StatelessWidget {
             create: (_) => TagRequestListController()..load()),
       ],
       child: MaterialApp(
-        title: 'Graphics Bay Tracker',
+        title: 'Bay Tracker',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,

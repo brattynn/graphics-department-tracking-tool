@@ -1,19 +1,21 @@
-# Graphics Department Tracking Tool
+# Graphics Department Tracking Tool ("Bay Tracker")
 
-A single-user Windows desktop application that tracks fire truck graphics jobs as they move through an 8-bay production shop — from design proofing, through striping/lettering/chevron installation, through QC, to completion. It replaced an informal Trello-and-memory process with a real, structured system that has an actual data model, automatic history logging, and enforced business rules.
+A single-user application — called **Bay Tracker** — that tracks fire truck graphics jobs as they move through an 8-bay production shop — from design proofing, through striping/lettering/chevron installation, through QC, to completion. It replaced an informal Trello-and-memory process with a real, structured system that has an actual data model, automatic history logging, and enforced business rules.
 
-Built with **Flutter (Windows desktop)** and a local **SQLite** database. No server, no login, no cloud dependency — it's a purpose-built tool for one person's daily workflow, packaged as a native `.exe`.
+Built with **Flutter** and a local **SQLite** database, running natively on both **Windows desktop** and **Android** (used on a tablet on the shop floor). No server, no login, no cloud dependency — it's a purpose-built tool for one person's daily workflow.
 
 ![Active trucks list](docs/screenshot-truck-list.png)
 
 ## Download & install
 
-Grab the latest installer from **[Releases](../../releases/latest)** — `BayTrackerSetup.exe`. It's a standard Windows installer (built with Inno Setup):
+**Windows:** grab the latest installer from **[Releases](../../releases/latest)** — `BayTrackerSetup.exe`. It's a standard Windows installer (built with Inno Setup):
 
 - Installs per-user (no admin rights required, no UAC prompt)
 - Creates a Start Menu shortcut and an optional desktop shortcut
 - Registers a normal uninstaller in Windows' "Add or Remove Programs"
 - On first launch, the app creates its own SQLite database automatically — there's nothing to configure, no server to point at, no separate setup step
+
+**Android:** grab `app-release.apk` from the same [Releases](../../releases/latest) page and sideload it (enable "install from unknown sources" for whichever app you use to open it), or install directly over USB with `adb install app-release.apk`.
 
 ## Why this exists
 
@@ -47,9 +49,9 @@ This app models that real workflow directly: stages, sub-steps, schedule status,
 
 | Layer | Choice | Why |
 |---|---|---|
-| UI framework | Flutter (Windows desktop target) | Native `.exe`, no browser/runtime dependency, one codebase for the whole UI |
+| UI framework | Flutter (Windows desktop + Android) | One codebase, native binaries on both platforms — no browser/runtime dependency |
 | State management | `provider` (`ChangeNotifier`) | Matches the app's scale — no need for a heavier state framework |
-| Database | SQLite via `sqflite_common_ffi` | Zero-setup, single-file, works fully offline; the `_ffi` variant is what makes `sqflite` — normally mobile-only — work on Windows desktop |
+| Database | SQLite — `sqflite_common_ffi` on Windows, `sqflite` on Android | Zero-setup, single-file, works fully offline on both. `sqflite_common_ffi` (FFI + bundled `sqlite3`) only supports Windows/Linux/macOS, so `DatabaseHelper` picks the platform-native backend at runtime — see [*Engineering notes*](#engineering-notes--decisions-worth-explaining) |
 | File dialogs | `file_selector` | See [*Engineering notes*](#engineering-notes--decisions-worth-explaining) below — this replaced `file_picker`, which has a real bug on Windows |
 | Opening PDFs | `url_launcher` | Hands proof PDFs off to the OS's default viewer instead of embedding a PDF renderer |
 | Local file paths | `path_provider` + `path` | Resolves a per-user app-data directory for the DB file and copied proof PDFs |
@@ -146,6 +148,8 @@ A few things in this codebase exist because of a real bug or a real design trade
 
 - **`IndexedStack` + un-tagged `FloatingActionButton`s crashed the app on the very first "Add Truck" tap.** `HomeShell` keeps all three tabs (Trucks, Tag Requests, Archive) mounted simultaneously via `IndexedStack` so switching tabs doesn't lose scroll position or in-progress filters. But `FloatingActionButton` uses an implicit *shared* Hero tag when none is given — so with two FABs ("Add Truck" and "Add Request") both mounted at once, the instant either one triggered a page transition, Flutter's `HeroController` found two Hero widgets with the same tag in the same subtree and threw, closing the app. Fixed by giving each FAB an explicit, unique `heroTag`. Caught and reproduced with a `flutter_test` widget test (`test/widget_smoke_test.dart`) before fixing it, which now guards against the same class of bug on any other tab that gets a FAB in the future. (Side note while chasing this down: `testWidgets`' virtual-time zone doesn't service the real background isolate `sqflite_common_ffi` uses, so `pumpAndSettle()` after anything that triggers a DB load can hang or time out — worth knowing if you add more widget tests here.)
 
+- **`sqflite_common_ffi` doesn't support Android.** It's built for Windows/Linux/macOS (FFI bindings to a bundled `sqlite3`), while Android/iOS are meant to use plain `sqflite` (native SQLite via platform channels). Both packages share the same underlying `sqflite_common` types, so a single `DatabaseHelper._open()` can branch on `Platform.isWindows/isLinux/isMacOS` and only call `sqfliteFfiInit()`/assign `databaseFactory` on desktop — Android just uses `sqflite`'s own default factory, untouched. One non-obvious wrinkle: the analyzer flags the `package:sqflite/sqflite.dart` import as "unnecessary" (`sqflite_common_ffi` re-exports every symbol it uses), but removing it would drop `sqflite`'s Android/iOS plugin registration from the build — the import is needed for its *side effect*, not its symbols, so it's suppressed with an explanatory comment instead of deleted.
+
 - **`CompanyName`/`ProductName` in the Windows `.rc` file are load-bearing, not cosmetic.** `path_provider_windows` derives the app's local-data folder as `%LOCALAPPDATA%\<CompanyName>\<ProductName>\...` straight from the exe's version resource. During a UI polish pass I renamed `ProductName` for a nicer Task Manager/properties display — which silently pointed every future launch at a brand-new, empty folder, orphaning the existing SQLite database. No data was actually deleted, but it would look exactly like data loss to a real user after an update. Reverted `ProductName`, kept the cosmetic `FileDescription` change, and left a comment in `Runner.rc` explaining why those two fields specifically can't change without a migration.
 
 - **Bay uniqueness is enforced at the database level, not just in the UI.** `idx_truck_bay_active` is a *partial* unique index (`WHERE is_active = 1`) on `truck.bay_number` — only active trucks compete for a bay, so a bay frees up the instant a truck is archived, and a completed truck's old bay number doesn't collide with whoever's using it now. The repository layer catches the resulting SQLite constraint violation and turns it into a typed `BayTakenException` the UI can show as a real error message instead of leaking a raw database exception.
@@ -160,26 +164,32 @@ A few things in this codebase exist because of a real bug or a real design trade
 
 ## Testing
 
-Business logic is covered by repository-level tests that run against a real (temp-file) SQLite database via `sqflite_common_ffi` — no UI, no mocks:
-
 ```
-flutter test test/repository_smoke_test.dart
+flutter test
 ```
 
-Covers: stage transitions in both directions, sub-step seeding/skipping for dealer-supplied trucks, custom sub-steps, bay-uniqueness and duplicate-HS-number rejection, cascade delete, the 8-active/8-archived rolling retention window, tag request status filtering, and the v1→v2 schema migration against a hand-built legacy database file.
+runs the full suite (28 tests):
+
+- **`repository_smoke_test.dart`** — business logic against a real (temp-file) SQLite database via `sqflite_common_ffi`, no UI, no mocks. Covers stage transitions in both directions, sub-step seeding/skipping for dealer-supplied trucks, custom sub-steps, bay-uniqueness and duplicate-HS-number rejection, cascade delete, the 8-active/8-archived rolling retention window, tag request status filtering, and the v1→v2 schema migration against a hand-built legacy database file.
+- **`widget_smoke_test.dart`** — pumps the real app and drives actual navigation (see the Hero-tag crash in *Engineering notes*).
+- **`truck_progress_test.dart`** — pure unit tests for the completion-percentage calculation.
 
 ## Getting started
 
-**Requirements:** Flutter SDK (Windows desktop support enabled), Visual Studio with the "Desktop development with C++" workload.
+**Requirements:** Flutter SDK. For Windows: Visual Studio with the "Desktop development with C++" workload. For Android: the Android SDK/toolchain (`flutter doctor` should show both as installed).
 
 ```powershell
 flutter pub get
-flutter run -d windows      # run in debug mode
+flutter test                # run the full test suite
+
+flutter run -d windows      # run on Windows in debug mode
 flutter build windows       # produce build\windows\x64\runner\Release\graphics_bay_tracker.exe
-flutter test                # run the test suite
+
+flutter run -d <device-id>       # run on a connected Android device/emulator
+flutter build apk --release      # produce build\app\outputs\flutter-apk\app-release.apk
 ```
 
-The SQLite database and any attached proof PDFs are stored in the current user's app-data directory (`%LOCALAPPDATA%\...\BayTracker\`) — nothing is written outside that folder, and there's no network access at all.
+The SQLite database and any attached proof PDFs are stored in the current user's app-data directory (`%LOCALAPPDATA%\...\BayTracker\` on Windows, app-private storage on Android) — nothing is written outside that folder, and there's no network access at all.
 
 ### Building the installer
 
@@ -191,7 +201,9 @@ iscc packaging\installer.iss
 # -> packaging\Output\BayTrackerSetup.exe
 ```
 
-It's a per-user install (`PrivilegesRequired=lowest`) targeting `%LOCALAPPDATA%\Programs\Graphics Bay Tracker`, so it doesn't need admin rights and won't prompt for UAC elevation — appropriate for installing on a work PC without needing IT involved.
+It's a per-user install (`PrivilegesRequired=lowest`) targeting `%LOCALAPPDATA%\Programs\Bay Tracker`, so it doesn't need admin rights and won't prompt for UAC elevation — appropriate for installing on a work PC without needing IT involved.
+
+For Android: `flutter build apk --release` produces `build/app/outputs/flutter-apk/app-release.apk`.
 
 ## Project structure
 
@@ -206,14 +218,18 @@ lib/
     state/         ChangeNotifier controllers (filter/sort state, wraps repositories)
   utils/           Stage/option constants, app-data path resolution, file-open helper
 test/
-  repository_smoke_test.dart   Full business-rule test suite (see Testing, above)
+  repository_smoke_test.dart   Business-rule test suite against a real temp-file SQLite DB
+  widget_smoke_test.dart       Widget-level navigation tests (see the Hero-tag bug above)
+  truck_progress_test.dart     Pure unit tests for the completion-percentage calculation
 packaging/
   installer.iss    Inno Setup script that builds BayTrackerSetup.exe
+android/           Android platform target (mipmap icons, manifest, Gradle config)
+windows/           Windows platform target (runner, .rc version metadata)
 ```
 
 ## Out of scope (for now)
 
-Multi-user accounts, cloud sync, mobile builds, a kanban board view, a reporting/analytics dashboard, and notifications were all deliberately deferred — this is a single-user tool built to solve one specific, concrete workflow problem first. The stage-history log is already captured in the background for a future timeline view without needing a schema change to add it.
+Multi-user accounts, cloud sync, a kanban board view, a reporting/analytics dashboard, and notifications were all deliberately deferred — this is a single-user tool built to solve one specific, concrete workflow problem first. The stage-history log is already captured in the background for a future timeline view without needing a schema change to add it. (Mobile was originally deferred too, but the app now runs on Android as well as Windows — see *Download & install* above.)
 
 ## License
 

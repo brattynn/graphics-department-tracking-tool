@@ -1,4 +1,4 @@
-; Inno Setup script for Graphics Bay Tracker.
+; Inno Setup script for Bay Tracker.
 ;
 ; Produces a single-file Windows installer (BayTrackerSetup.exe) that installs
 ; the app per-user (no admin rights required), creates Start Menu / optional
@@ -10,7 +10,7 @@
 ; Then compile: ISCC packaging\installer.iss   (run from the repo root, or
 ; adjust MyBuildDir below if run from elsewhere)
 
-#define MyAppName "Graphics Bay Tracker"
+#define MyAppName "Bay Tracker"
 #define MyAppVersion "1.2.0"
 #define MyAppPublisher "Brattynn Thompson"
 #define MyAppExeName "graphics_bay_tracker.exe"
